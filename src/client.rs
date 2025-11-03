@@ -1,26 +1,24 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 use bevy::prelude::*;
 use bevy::tasks::*;
-use quinn::{Endpoint, crypto};
 
 #[derive(Component)]
 pub struct Client {
     pub addr: SocketAddr,
     pub server_name: String,
     #[allow(unused)]
-    ep: Endpoint,
+    ep: quinn::Endpoint,
 }
 
 impl Client {
     pub fn new(
         addr: SocketAddr,
         server_name: String,
-        crypto: Arc<dyn crypto::ClientConfig>,
+        config: quinn::ClientConfig,
     ) -> (Client, ConnectionTask) {
-        let mut ep = Endpoint::client(addr).unwrap();
-        let client_cfg = quinn::ClientConfig::new(crypto);
-        ep.set_default_client_config(client_cfg);
+        let mut ep = quinn::Endpoint::client(addr).unwrap();
+        ep.set_default_client_config(config);
 
         let conn_srv_name = server_name.clone();
         let conn_ep = ep.clone();

@@ -3,11 +3,14 @@ name = "bevy_miniquinn"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["rustls"]
+rustls = ["quinn/rustls"]
+
 [dependencies]
 bevy = { version = "0.17.2", default-features = false, features = ["bevy_log"] }
 quinn = { version = "0.11.9", default-features = false, features = [
   "log",
   "ring",
   "async-io",
-  "rustls",
 ] }

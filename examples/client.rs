@@ -1,20 +1,21 @@
 use bevy::prelude::*;
 use bevy_miniquinn::client::*;
 
+mod helpers;
+
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, bevy_miniquinn::ClientPlugin))
-        .add_systems(Startup, setup)
-        .add_systems(Update, listen);
+        .add_systems(Startup, connect)
+        .add_systems(Update, listen)
+        .run();
 }
 
-#[allow(unreachable_code)]
-fn setup(mut commands: Commands) {
+fn connect(mut commands: Commands) {
     commands.spawn(Client::new(
         "0.0.0.0:443".parse().unwrap(),
         "my_server".into(),
-        // TLS
-        todo!(),
+        helpers::insecure_client_config(),
     ));
 }
 
