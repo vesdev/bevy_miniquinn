@@ -13,13 +13,13 @@ fn main() {
 
 fn connect(mut commands: Commands) {
     commands.spawn(ClientBundle::new(
-        "0.0.0.0:443".parse().unwrap(),
+        "127.0.0.1:4433".parse().unwrap(),
         "my_server".into(),
         helpers::insecure_client_config(),
     ));
 }
 
-fn listen(mut reader: MessageReader<message::Data>) {
+fn listen(mut reader: MessageReader<message::ServerData>) {
     for msg in reader.read() {
         println!("message from server {}", String::from_utf8_lossy(&msg.data));
     }

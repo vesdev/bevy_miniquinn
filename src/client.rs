@@ -3,15 +3,19 @@ use std::net::SocketAddr;
 use bevy::prelude::*;
 use bevy::tasks::*;
 
+use crate::client::message::ServerData;
+use crate::component::Connection;
+use crate::task;
+
 #[derive(Bundle)]
 pub struct ClientBundle {
     pub client: Client,
-    pub connection_task: ConnectionTask,
+    pub connection_task: task::Connect,
 }
 
 impl ClientBundle {
     pub fn new(addr: SocketAddr, server_name: String, config: quinn::ClientConfig) -> Self {
-        let mut ep = quinn::Endpoint::client(addr).unwrap();
+        let mut ep = quinn::Endpoint::client("127.0.0.1:0".parse::<SocketAddr>().unwrap()).unwrap();
         ep.set_default_client_config(config);
 
         let conn_srv_name = server_name.clone();
@@ -32,7 +36,7 @@ impl ClientBundle {
                 addr,
                 server_name,
             },
-            connection_task: ConnectionTask(task),
+            connection_task: task::Connect(task),
         }
     }
 }
@@ -45,19 +49,11 @@ pub struct Client {
     ep: quinn::Endpoint,
 }
 
-#[derive(Component)]
-pub struct Connection(quinn::Connection);
-
-#[derive(Component)]
-pub struct ConnectionTask(Task<Option<quinn::Connection>>);
-
-#[derive(Component, Default)]
-pub struct StreamTask(Option<Task<Option<Vec<u8>>>>);
-
 pub mod message {
     use bevy::prelude::*;
     #[derive(Message)]
-    pub struct Data {
+    pub struct ServerData {
+        /// which client received the data
         pub client: Entity,
         pub data: Vec<u8>,
     }
@@ -67,11 +63,12 @@ pub struct ClientPlugin;
 
 impl Plugin for ClientPlugin {
     fn build(&self, app: &mut bevy::app::App) {
-        app.add_systems(Update, (connection_task, stream_task));
+        app.add_message::<ServerData>()
+            .add_systems(Update, (connection_task, stream_task));
     }
 }
 
-fn connection_task(mut commands: Commands, tasks: Query<(Entity, &Client, &mut ConnectionTask)>) {
+fn connection_task(mut commands: Commands, tasks: Query<(Entity, &Client, &mut task::Connect)>) {
     for (entity, client, mut task) in tasks {
         let Some(result) = block_on(poll_once(&mut task.0)) else {
             continue;
@@ -87,8 +84,8 @@ fn connection_task(mut commands: Commands, tasks: Query<(Entity, &Client, &mut C
                 );
                 commands
                     .entity(entity)
-                    .remove::<ConnectionTask>()
-                    .insert((Connection(conn), StreamTask::default()));
+                    .remove::<task::Connect>()
+                    .insert(Connection(conn));
             }
             None => {
                 error!(
@@ -97,46 +94,70 @@ fn connection_task(mut commands: Commands, tasks: Query<(Entity, &Client, &mut C
                     client.addr.ip(),
                     client.addr.port(),
                 );
-                commands.entity(entity).remove::<ConnectionTask>();
+                commands.entity(entity).remove::<task::StreamRead>();
             }
         }
     }
 }
 
 fn stream_task(
-    mut writer: MessageWriter<message::Data>,
-    mut connections: Query<(Entity, &Connection, &mut StreamTask)>,
+    mut commands: Commands,
+    mut writer: MessageWriter<message::ServerData>,
+    streamless: Query<(Entity, &Connection), Without<task::Stream>>,
+    mut opened: Query<(Entity, &mut task::Stream)>,
+    mut reading: Query<(Entity, &Connection, &mut task::StreamRead)>,
 ) {
-    for (_, conn, mut stream) in &mut connections {
-        if stream.0.is_none() {
-            let conn = conn.0.clone();
-            let task = IoTaskPool::get().spawn(async move {
-                match conn.open_bi().await {
-                    Ok((_send, mut recv)) => {
-                        let mut buf = Vec::new();
-                        while let Ok(Some(chunk)) = recv.read_chunk(1024, true).await {
-                            buf.extend_from_slice(&chunk.bytes);
+    // spawn task to open stream
+    for (entity, conn) in &streamless {
+        let conn = conn.0.clone();
+        let task = IoTaskPool::get().spawn(async move { conn.open_bi().await.ok() });
+        commands.entity(entity).insert(task::Stream(task));
+    }
+
+    // poll until open and spawn read task
+    for (entity, mut open_task) in &mut opened {
+        if let Some(result) = block_on(poll_once(&mut open_task.0)) {
+            commands.entity(entity).remove::<task::Stream>();
+
+            if let Some((_, recv)) = result {
+                let task = IoTaskPool::get().spawn(async move {
+                    let mut recv = recv;
+                    let mut buf = Vec::new();
+                    loop {
+                        match recv.read_chunk(1024, true).await {
+                            Ok(Some(chunk)) => {
+                                buf.extend_from_slice(&chunk.bytes);
+                            }
+                            Ok(None) => {
+                                return task::ReadResult::Data(buf);
+                            }
+                            Err(_) => return task::ReadResult::Error,
                         }
-                        Some(buf)
                     }
-                    Err(_) => None,
-                }
-            });
-            stream.0 = Some(task);
+                });
+                commands.entity(entity).insert(task::StreamRead(task));
+            }
         }
     }
 
-    for (entity, _, mut stream) in &mut connections {
-        if stream.0.is_some() {
-            let result = stream.0.as_mut().map(|task| block_on(poll_once(task)));
-            if let Some(Some(result)) = result {
-                stream.0 = None;
-
-                if let Some(result) = result {
-                    writer.write(message::Data {
+    // poll for read
+    for (entity, _, mut stream) in &mut reading {
+        if let Some(result) = block_on(poll_once(&mut stream.0)) {
+            match result {
+                task::ReadResult::Data(data) => {
+                    writer.write(message::ServerData {
                         client: entity,
-                        data: result,
+                        data,
                     });
+                    commands.entity(entity).remove::<task::StreamRead>();
+                }
+                task::ReadResult::Closed => {
+                    info!("Server closed connection");
+                    commands.entity(entity).despawn();
+                }
+                task::ReadResult::Error => {
+                    error!("Connection error with server");
+                    commands.entity(entity).despawn();
                 }
             }
         }

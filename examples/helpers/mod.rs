@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use quinn::{
-    crypto::rustls::QuicClientConfig,
+    crypto::rustls::{QuicClientConfig, QuicServerConfig},
     rustls::{self, SignatureScheme, pki_types},
 };
 
@@ -12,6 +12,24 @@ pub fn insecure_client_config() -> quinn::ClientConfig {
         .with_no_client_auth();
 
     quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(rustls_config).unwrap()))
+}
+
+pub fn insecure_server_config() -> quinn::ServerConfig {
+    use rcgen::{CertifiedKey, generate_simple_self_signed};
+    let subject_alt_names = vec!["miniquinn-server".to_string(), "localhost".to_string()];
+
+    let CertifiedKey { cert, signing_key } =
+        generate_simple_self_signed(subject_alt_names).unwrap();
+
+    let rustls_config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(
+            vec![cert.der().clone()],
+            pki_types::PrivateKeyDer::Pkcs8(signing_key.serialize_der().into()),
+        )
+        .unwrap();
+
+    quinn::ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(rustls_config).unwrap()))
 }
 
 #[derive(Debug)]
