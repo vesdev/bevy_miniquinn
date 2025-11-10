@@ -8,6 +8,7 @@ default = ["rustls"]
 rustls = ["quinn/rustls"]
 
 [dependencies]
+bevy_asynk_strim = { git = "https://github.com/vesdev/bevy_asynk_strim" }
 bevy = { version = "0.17.2", default-features = false, features = ["bevy_log"] }
 quinn = { version = "0.11.9", default-features = false, features = [
   "log",

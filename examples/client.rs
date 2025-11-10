@@ -1,5 +1,6 @@
 use bevy::prelude::*;
-use bevy_miniquinn::client::*;
+use bevy_asynk_strim::StreamValue;
+use bevy_miniquinn::client::{self, *};
 
 mod helpers;
 
@@ -12,15 +13,18 @@ fn main() {
 }
 
 fn connect(mut commands: Commands) {
-    commands.spawn(ClientBundle::new(
+    client::connect(
+        &mut commands,
         "127.0.0.1:4433".parse().unwrap(),
         "my_server".into(),
         helpers::insecure_client_config(),
-    ));
+    );
 }
 
-fn listen(mut reader: MessageReader<message::ServerData>) {
-    for msg in reader.read() {
-        println!("message from server {}", String::from_utf8_lossy(&msg.data));
+fn listen(stream: Query<&mut StreamValue<ServerMessage>>) {
+    for mut value in stream {
+        if let Some(ServerMessage::Data(buf)) = value.consume() {
+            info!("Message from remote {}", String::from_utf8_lossy(&buf))
+        }
     }
 }

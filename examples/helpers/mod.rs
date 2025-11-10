@@ -5,6 +5,7 @@ use quinn::{
     rustls::{self, SignatureScheme, pki_types},
 };
 
+#[allow(unused)]
 pub fn insecure_client_config() -> quinn::ClientConfig {
     let rustls_config = rustls::ClientConfig::builder()
         .dangerous()
@@ -14,6 +15,7 @@ pub fn insecure_client_config() -> quinn::ClientConfig {
     quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(rustls_config).unwrap()))
 }
 
+#[allow(unused)]
 pub fn insecure_server_config() -> quinn::ServerConfig {
     use rcgen::{CertifiedKey, generate_simple_self_signed};
     let subject_alt_names = vec!["miniquinn-server".to_string(), "localhost".to_string()];
