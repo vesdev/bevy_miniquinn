@@ -12,7 +12,7 @@ use quinn::Incoming;
 use crate::component::RemoteAddr;
 use crate::component::RemoteBundle;
 
-pub fn create(commands: &mut Commands, addr: SocketAddr, config: quinn::ServerConfig) {
+pub fn create(commands: &mut Commands, addr: SocketAddr, config: quinn::ServerConfig) -> Entity {
     let ep = quinn::Endpoint::server(config, addr).unwrap();
     info!("QUIC server listening on {}:{}", addr.ip(), addr.port());
 
@@ -27,7 +27,10 @@ pub fn create(commands: &mut Commands, addr: SocketAddr, config: quinn::ServerCo
         }),
     ));
 
-    commands.spawn(Server { _ep: ep, addr }).add_child(stream);
+    commands
+        .spawn(Server { _ep: ep, addr })
+        .add_child(stream)
+        .id()
 }
 
 #[derive(Component)]

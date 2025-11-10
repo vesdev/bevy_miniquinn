@@ -21,7 +21,7 @@ pub fn connect(
     addr: SocketAddr,
     server_name: String,
     config: quinn::ClientConfig,
-) {
+) -> Entity {
     let mut ep = quinn::Endpoint::client("127.0.0.1:0".parse::<SocketAddr>().unwrap()).unwrap();
     ep.set_default_client_config(config);
 
@@ -43,7 +43,8 @@ pub fn connect(
             server_name,
             _ep: ep,
         })
-        .insert(ConnectTask(task));
+        .insert(ConnectTask(task))
+        .id()
 }
 
 #[allow(unused)]

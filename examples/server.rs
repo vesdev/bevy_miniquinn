@@ -27,23 +27,3 @@ fn listen(stream: Query<&mut StreamValue<ClientMessage>>) {
         }
     }
 }
-
-// fn listen(mut reader: MessageReader<ClientMessage>, addrs: Query<&RemoteAddr>) {
-//     for msg in reader.read() {
-//         match msg {
-//             ClientMessage::Data { data, .. } => {
-//                 if !data.is_empty() {
-//                     println!("message from server {}", String::from_utf8_lossy(data));
-//                 }
-//             }
-//             ClientMessage::Connected { client } => {
-//                 let addr = addrs.get(*client).unwrap().0;
-//                 println!("Client connected at: {addr}");
-//             }
-//             ClientMessage::Disconnected { client } => {
-//                 let addr = addrs.get(*client).unwrap().0;
-//                 println!("Client disconnected at: {addr}");
-//             }
-//         }
-//     }
-// }
